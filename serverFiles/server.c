@@ -20,6 +20,7 @@
 #define		FALSE		0
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t condition_var = PTHREAD_COND_INITIALIZER;
 
 
 typedef struct sockaddr_in SA_IN;
@@ -29,7 +30,7 @@ void * handle_connection(void* p_connfd);
 int check(int expo, const char *msg);
 void * thread_function(void *arg);
 int LISTENFD;
-
+int currentQueueSize = 0;
 
 //function trims leading and trailing whitespaces
 void trim(char *str)
@@ -297,6 +298,7 @@ int main(int argc, char **argv)
 
   for (int i=0; i<threadsize; i++) {
 
+
     pthread_create(&thread_pool[i], NULL, thread_function, NULL);
 
   }
@@ -320,21 +322,30 @@ int main(int argc, char **argv)
       printf("Waiting for connections... \n");
 
       addr_size = sizeof(SA_IN);
+
       check(connfd =
         accept(listenfd, (SA*)&client_addr, (socklen_t*)&addr_size),
           "accept failed");
+
       printf("A new client just connected! \n");
 
 
-      LISTENFD == listenfd;
+			if(currentQueueSize < threadsize){
+				currentQueueSize +=1 ;
+				printf("first call %d\n",currentQueueSize );
+	      LISTENFD == listenfd;
+	      int *pclient = malloc(sizeof(int));
+	      *pclient = connfd;
+	      pthread_mutex_lock(&mutex);
+	      enqueue(pclient);
+				pthread_cond_signal(&condition_var);
+	      pthread_mutex_unlock(&mutex);
 
+			}
+			else{
+				printf("\nQueue is full, couldn't connect client.");
+			}
 
-
-      int *pclient = malloc(sizeof(int));
-      *pclient = connfd;
-      pthread_mutex_lock(&mutex);
-      enqueue(pclient);
-      pthread_mutex_unlock(&mutex);
 
     } //fin de while
 
@@ -355,11 +366,15 @@ void * thread_function(void *arg){
   while (true){
     int *pclient;
     pthread_mutex_lock(&mutex);
+		pthread_cond_wait(&condition_var,&mutex);
     pclient = dequeue();
     pthread_mutex_unlock(&mutex);
 
     if (pclient != NULL){
       handle_connection(pclient);
+			printf("current qsize was %d : \n",currentQueueSize );
+			currentQueueSize = currentQueueSize-1;
+			printf("after resta is %d: \n",currentQueueSize );
     }
   }
 }
@@ -431,7 +446,10 @@ void * handle_connection(void* p_connfd){
     }
       printf("Exiting Child Process...\n");
       close(connfd);
+
       _exit(1);
+
+
   }
   //end child process-------------------------------------------------------------
   close(connfd);
