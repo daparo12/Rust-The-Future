@@ -71,7 +71,7 @@ int get_port_string(char *str, char *ip, int n5, int n6){
         }
     }
 
-    sprintf(str, "PORT %s,%d,%d", ip_temp, n5, n6);
+    sprintf(str, "port number %s,%d,%d", ip_temp, n5, n6);
     return 1;
 }
 
@@ -98,13 +98,13 @@ int get_command(char *command){
 	while(check < 0){
     	char *str;
     	if(get_user_input(command) < 0){
-    		printf("Cannot Read Command...\nPlease Try Again...\n");
+    		printf("Unable to read your command...\n retry...\n");
             bzero(command, (int)sizeof(command));
     		continue;
     	}
 
         if(strlen(command) < 2){
-            printf("No Input Detected...\nPlease Try Again\n");
+            printf("No input detected...\n retry...\n");
             bzero(command, (int)sizeof(command));
             continue;
         }
@@ -113,7 +113,7 @@ int get_command(char *command){
         strcpy(copy, command);
 
         if(check_command(copy) < 0){
-            	printf("Invalid Format...\nPlease Try Again...\n");
+            	printf("Invalid format...\n retry...\n");
             	bzero(command, (int)sizeof(command));
             	bzero(copy, (int)sizeof(copy));
             	continue;
@@ -202,7 +202,7 @@ int do_ls(int controlfd, int datafd, char *input){
     int maxfdp1, data_finished = FALSE, control_finished = FALSE;
 
     if(get_filename(input, filelist) < 0){
-        printf("No Filelist Detected...\n");
+
         sprintf(str, "LIST");
     }else{
         sprintf(str, "LIST %s", filelist);
@@ -242,7 +242,7 @@ int do_ls(int controlfd, int datafd, char *input){
         }
 
         if(FD_ISSET(datafd, &rdset)){
-            printf("Server Data Response:\n");
+            printf("Server said:\n");
             while(read(datafd, recvline, MAXLINE) > 0){
                 printf("%s", recvline);
                 bzero(recvline, (int)sizeof(recvline));
@@ -281,13 +281,13 @@ int do_get(int controlfd, int datafd, char *input){
         write(controlfd, send, strlen(send));
         bzero(send, (int)sizeof(send));
         read(controlfd, send, 1000);
-        printf("Server Response: %s\n", send);
+        printf("Server said: %s\n", send);
         return -1;
     }else{
         sprintf(str, "RETR %s", filename);
     }
     printf("File: %s\n", filename);
-    sprintf(temp1, "%s-out", filename);
+    sprintf(temp1, "%s-rcv", filename);
     bzero(filename, (int)sizeof(filename));
 
 
@@ -453,14 +453,14 @@ int main(int argc, char **argv){
 	char command[1024], ip[50], str[MAXLINE+1];
 
 
-	if(argc != 3){
+	if(argc != 2){
 		printf("Invalid Number of Arguments...\n");
 		printf("Usage: ./ftpclient <server-ip> <server-listen-port>\n");
 		exit(-1);
 	}
 
 	//get server port
-	sscanf(argv[2], "%d", &server_port);
+	sscanf(argv[1], "%d", &server_port);
 
     //set up control connection--------------------------------------------------
     if ( (controlfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
@@ -471,7 +471,7 @@ int main(int argc, char **argv){
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port   = htons(server_port);
-    if (inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0){
+    if (inet_pton(AF_INET, "127.0.0.1", &servaddr.sin_addr) <= 0){
     	perror("inet_pton error");
     	exit(-1);
     }
@@ -497,12 +497,12 @@ int main(int argc, char **argv){
     //get ip address from control port
     get_ip_port(controlfd, ip, (int *)&x);
     //x = 0;
-    printf("x: %d\n", x);
-    printf("ip: %s\n", ip);
+		printf("Connected to server!");
+		printf("\n");
+
     //get data connection port from listenfd
     get_ip_port(listenfd, str, (int *)&port);
 
-    printf("Port: %d, str: %s\n",  port, str);
     convert(port, &n5, &n6);
 
     while(1){
@@ -531,7 +531,7 @@ int main(int argc, char **argv){
         bzero(str, (int)sizeof(str));
         datafd = accept(listenfd, (struct sockaddr*)NULL, NULL);
 
-        printf("Data connection Established...\n");
+        printf("A connection has been set...\n");
 
         if(code == 1){
             if(do_ls(controlfd, datafd, command) < 0){

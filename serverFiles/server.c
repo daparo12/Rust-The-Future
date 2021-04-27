@@ -8,6 +8,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <dirent.h>
+#include "myqueue.h"
 
 #define SERVERPORT 8989
 #define BUFSIZE 5096
@@ -18,12 +19,15 @@
 #define		TRUE		1
 #define		FALSE		0
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 typedef struct sockaddr_in SA_IN;
 typedef struct sockaddr SA;
 
 void * handle_connection(void* p_connfd);
 int check(int expo, const char *msg);
+void * thread_function(void *arg);
 int LISTENFD;
 
 
@@ -243,7 +247,7 @@ int do_stor(int controlfd, int datafd, char *input){
 	int n = 0, p = 0;
 
 	if(get_filename(input, filename) > 0){
-		sprintf(str, "%s-out", filename);
+		sprintf(str, "%s-rcv", filename);
 	}else{
 		printf("Filename Not Detected\n");
 		sprintf(sendline, "450 Requested file action not taken.\n");
@@ -251,7 +255,7 @@ int do_stor(int controlfd, int datafd, char *input){
 		return -1;
 	}
 
-	sprintf(temp1, "%s-out", filename);
+	sprintf(temp1, "%s-rcv", filename);
 	FILE *fp;
     if((fp = fopen(temp1, "w")) == NULL){
         perror("file error");
@@ -278,11 +282,24 @@ int main(int argc, char **argv)
 {
 
 
-  int listenfd, connfd, addr_size, port, threadnumber;
+  int listenfd, connfd, addr_size, port, threadsize, ipnumber;
   SA_IN server_addr, client_addr;
 
-  sscanf(argv[1], "%d", &port);
 
+
+
+  sscanf(argv[6], "%d", &port);
+  sscanf(argv[4], "%d", &ipnumber);
+  sscanf(argv[2], "%d", &threadsize);
+
+  pthread_t thread_pool[threadsize];
+
+
+  for (int i=0; i<threadsize; i++) {
+
+    pthread_create(&thread_pool[i], NULL, thread_function, NULL);
+
+  }
 
   check((listenfd = socket(AF_INET, SOCK_STREAM, 0 )),
         "Failed to create socket");
@@ -306,23 +323,25 @@ int main(int argc, char **argv)
       check(connfd =
         accept(listenfd, (SA*)&client_addr, (socklen_t*)&addr_size),
           "accept failed");
-      printf("New Client Connected! \n");
-      LISTENFD == listenfd;
-      pthread_t t;
-      int *pclient = malloc(sizeof(int));
-      *pclient = connfd;
-      pthread_create(&t, NULL, handle_connection, pclient );
+      printf("A new client just connected! \n");
 
-/*
-      pthread_t t;
+
+      LISTENFD == listenfd;
+
+
+
       int *pclient = malloc(sizeof(int));
       *pclient = connfd;
-      pthread_create(&t, NULL, handle_connection, pclient );
-*/
+      pthread_mutex_lock(&mutex);
+      enqueue(pclient);
+      pthread_mutex_unlock(&mutex);
+
     } //fin de while
 
     return 0;
 }
+
+
 
 int check(int exp, const char *msg) {
   if(exp == SOCKETERROR) {
@@ -330,6 +349,19 @@ int check(int exp, const char *msg) {
     exit(1);
   }
   return exp;
+}
+
+void * thread_function(void *arg){
+  while (true){
+    int *pclient;
+    pthread_mutex_lock(&mutex);
+    pclient = dequeue();
+    pthread_mutex_unlock(&mutex);
+
+    if (pclient != NULL){
+      handle_connection(pclient);
+    }
+  }
 }
 
 
