@@ -29,7 +29,8 @@ void * handle_connection(void* p_connfd);
 int check(int expo, const char *msg);
 void * thread_function(void *arg);
 int LISTENFD;
-
+int clientsize,serversize;
+int activeUsers =0, onHold = 0;
 
 //function trims leading and trailing whitespaces
 void trim(char *str)
@@ -285,60 +286,71 @@ int main(int argc, char **argv)
   int listenfd, connfd, addr_size, port, threadsize, ipnumber;
   SA_IN server_addr, client_addr;
 
-
-
-
   sscanf(argv[6], "%d", &port);
   sscanf(argv[4], "%d", &ipnumber);
   sscanf(argv[2], "%d", &threadsize);
 
-  pthread_t thread_pool[threadsize];
+	if (threadsize!= 0 && port!=0){
+		pthread_t thread_pool[threadsize];
+		for (int i=0; i<threadsize; i++) {
 
+			pthread_create(&thread_pool[i], NULL, thread_function, NULL);
+		}
 
-  for (int i=0; i<threadsize; i++) {
-
-    pthread_create(&thread_pool[i], NULL, thread_function, NULL);
-
-  }
-
-  check((listenfd = socket(AF_INET, SOCK_STREAM, 0 )),
-        "Failed to create socket");
-
-  //Iniciar addres struct
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(port);
-
-  check(bind(listenfd,(SA*)&server_addr, sizeof(server_addr)),
-    "Bind Failed!");
-  check(listen(listenfd, SERVER_BACKLOG),
-    "Listen Failed!");
+		check((listenfd = socket(AF_INET, SOCK_STREAM, 0 )),
+					"Failed to create socket");
+					//Iniciar addres struct
+	  server_addr.sin_family = AF_INET;
+	  server_addr.sin_addr.s_addr = INADDR_ANY;
+	  server_addr.sin_port = htons(port);
+		check(bind(listenfd,(SA*)&server_addr, sizeof(server_addr)),
+	    "Bind Failed!");
+	  check(listen(listenfd, SERVER_BACKLOG),
+	    "Listen Failed!");
 
 
     while(true){
 
-      printf("Waiting for connections... \n");
+
 
       addr_size = sizeof(SA_IN);
-      check(connfd =
-        accept(listenfd, (SA*)&client_addr, (socklen_t*)&addr_size),
-          "accept failed");
-      printf("A new client just connected! \n");
 
 
-      LISTENFD == listenfd;
+			if(onHold == 0){
+				printf("Waiting for connections... \n");
+				check(connfd =
+					accept(listenfd, (SA*)&client_addr, (socklen_t*)&addr_size),
+						"accept failed");
+			}
+
+			if(activeUsers < threadsize){
+				onHold = 0;
+				printf("A new client just connected! \n");
 
 
+	      LISTENFD == listenfd;
+	      int *pclient = malloc(sizeof(int));
+	      *pclient = connfd;
+	      pthread_mutex_lock(&mutex);
+	      enqueue(pclient);
+	      pthread_mutex_unlock(&mutex);
 
-      int *pclient = malloc(sizeof(int));
-      *pclient = connfd;
-      pthread_mutex_lock(&mutex);
-      enqueue(pclient);
-      pthread_mutex_unlock(&mutex);
+			}
+
+			else{
+				int cola = activeUsers-threadsize+1;
+				if(onHold == 0){
+					printf("\n Server overloaded\n");
+				}
+				onHold=1;
+			}
+
 
     } //fin de while
 
     return 0;
+}
+
 }
 
 
@@ -360,8 +372,10 @@ void * thread_function(void *arg){
 
     if (pclient != NULL){
       handle_connection(pclient);
+			activeUsers--;
     }
   }
+	pthread_exit(NULL);
 }
 
 
